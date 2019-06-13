@@ -6,7 +6,10 @@
 # Date:		2019-06-13
 #
 # Todo:
-# Accept -OnlyMonitored and -OnlyUnmonitored and -OnlySummary binary modifiers
+# Check for valid authentication - DONE
+# Check for existence of CSV file - DONE
+# Accept location of csv as parameter - DONE
+# accept -OnlyMonitored and -OnlyUnmonitored and -OnlySummary binary modifiers, tab complete
 
 # Handling input parameters
 Param(
@@ -122,9 +125,26 @@ foreach($server in Get-Content $InputFile) {
 		}
 	}
 	if ($serverMonitored -ne 0) {
-		$unmonitoredServers += $serverName.host.toUpper()
+		$unmonitoredServers += $server.toUpper()
 	}
 
+}
+
+# TODO: Parameter logic flow needs refactoring
+if ($Action -eq "OnlyMonitored"){
+	Write-Host "`nList of all monitored servers:"
+	foreach ($monitoredServer in $monitoredServers){
+		Write-Host $monitoredServer
+	}
+	exit
+}
+
+if ($Action -eq "OnlyUnmonitored"){
+	Write-Host "`nList of all unmonitored servers:"
+	foreach ($unmonitoredServer in $unmonitoredServers){
+		Write-Host $unmonitoredServer
+	}
+	exit
 }
 
 # Print summary stats
@@ -132,7 +152,16 @@ Write-Host "`nSummary of servers from CSV:"
 Write-Host "Monitored servers: $($monitoredServers.length)"
 Write-Host "Unmonitored servers: $($unmonitoredServers.length)"
 
+if ($Action -eq "OnlySummary"){
+	exit
+}
+
 Write-Host "`nList of all monitored servers:"
 foreach ($monitoredServer in $monitoredServers){
 	Write-Host $monitoredServer
+}
+
+Write-Host "`nList of all unmonitored servers:"
+foreach ($unmonitoredServer in $unmonitoredServers){
+	Write-Host $unmonitoredServer
 }
