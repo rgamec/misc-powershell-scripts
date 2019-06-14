@@ -1,7 +1,19 @@
-# PowerShell script for re-installing a Zabbix Agent
+# Purpose:	Utility script to "manually" install a Zabbix agent.
+# Input: 	Zabbix server location. Organization domain. Agent binary in ./zabbix_agent/
+# Output:	Installs files to C:\Zabbix, configures a Windows Service, and sets
+#			firewall rules (TCP, ports 10050 and 10051).
+# Author:	Robert Game
+# Date:		2019-06-14
+#
+# Todo:
+# Add installation routines
+# Sort out formatting of script
+
+# User-defined variables
 $installationDirectory = "C:\Zabbix"
 $zabbixServerIP = 127.0.0.1
-$domain = "example.com"
+$domain = "domain.com"
+$agentInstallDirectory = "C:\Zabbix"
 
 Write-Host @"
  _____     _     _     _
@@ -36,6 +48,10 @@ Function printOutput{
 	}
 	Write-Host $messagetext
 }
+
+###############################################################################
+#	STAGE 1: CHECKING REQUIREMENTS								              #
+###############################################################################
 
 # Check requirements... gathering all checks under this heading.
 Write-Host "`nChecking requirements"
@@ -74,10 +90,23 @@ $addressString = nslookup "$($env:COMPUTERNAME).$($domain)" | Select-String -Pat
 $matchObject = $addressString -match '\d.*?$'
 if ($matchObject){
 	$agentIP = $matches[0].trim()
-	printOutput "SUCCESS" "Found external IP address of this host: $agentIP"
+	
+	# Running a quick regex to see if this is a valid IPv4 address
+	if ($agentIP -Match '\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}'){
+		printOutput "SUCCESS" "Found external IP address of this host: $agentIP"
+	} else {
+		printOutput "ERROR" "IP address appears to be incorrect. Value extracted was '$agentIP'"
+		exit
+	}
+	
 } else {
 	printOutput "ERROR" "Unable to determine the IP address of this server. Exiting."
+	exit
 }
+
+###############################################################################
+#	STAGE 2: UNINSTALL EXISTING AGENT							              #
+###############################################################################
 
 # Uninstall existing Zabbix agent
 Write-Host "`nNow starting Zabbix agent uninstallation..."
@@ -94,28 +123,26 @@ If (Get-Service -ServiceName "Zabbix Agent" -ErrorAction SilentlyContinue){
 } Else {
 	printOutput "SUCCESS" "There is no existing Zabbix Agent service running. Nothing to uninstall."
 }
-## If so, grab the path for the agent install folder
-## Stop the service
-# Stop-Service -ServiceName "Zabbix Agent"
-## Run a 'diff' against the existing config file
-## Delete the existing Zabbix agent folder
+
+###############################################################################
+#	STAGE 3: INSTALL AGENT TO HOST  							              #
+###############################################################################
 
 # Install Zabbix agent
-# Uninstall existing Zabbix agent
 Write-Host "`nNow starting Zabbix agent installation..."
 Write-Host "-------------------------------------------"
-## Find a good place to put the agent
-## C:\Zabbix since this will exist on every server
+
+## Create directory to store agent binary and configuration
 Try {
 	New-Item -Path "c:\" -Name "Zabbix" -ItemType "directory" -ErrorAction SilentlyContinue | Out-Null
-	If (-Not(Test-Path "C:\Zabbix")){
-		printOutput "ERROR" "Unknown error creating 'C:\Zabbix' directory. Exiting."
+	If (-Not(Test-Path $agentInstallDirectory)){
+		printOutput "ERROR" "Unknown error creating '$($agentInstallDirectory)' directory. Exiting."
 		exit
 	} else {
-		printOutput "SUCCESS" "Created new directory C:\Zabbix"
+		printOutput "SUCCESS" "Created new directory $($agentInstallDirectory)"
 	}
 } Catch {
-	printOutput "ERROR" "Unable to create directory C:\Zabbix"
+	printOutput "ERROR" "Unable to create directory $($agentInstallDirectory)"
 }
 
 ## Run a transform against the config file to insert the hostname (uppercase)
@@ -124,22 +151,24 @@ Try {
 ## Create firewall rule for Zabbix (TCP, inbound, 10050, 10051)
 
 # Let's check if we actually have New-NetFirewallRule available on this system
-Write-Host "`nAdding a Firewall Rule for the Zabbix Agent"
-Write-Host "--------------------------------------------"
-If (-Not (Get-Command New-NetFirewaallRule -errorAction SilentlyContinue))
+If (-Not (Get-Command New-NetFirewallRule -errorAction SilentlyContinue))
 {
     printOutput "WARN" "The PowerShell command 'New-NetFirewallRule' is not available on this system. `nPlease manually add a new firewall rule. `nInbound, TCP ports 10050 and 10051."
+} else {
+	printOutput "SUCCESS" "'New-NetFirewallRule' is available on this system. Firewall rule will be automatically added."
+	
+	# Check if there's an existing Zabbix firewall rule. If not, add a new rule. TCP, inbound, ports 10050 and 10051.
+	If (Get-NetFirewallRule -DisplayName "Zabbix" -errorAction SilentlyContinue){
+		printOutput "WARN" "There is already a firewall rule with the name 'Zabbix'. `nWe'll assume this is fine and skip adding a new firewall rule."
+	} Else {
+		Write-Host "No existing 'Zabbix' firewall rules have been found. Now adding a new rule."
+		#New-NetFirewallRule -DisplayName "Zabbix" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 10050,10051 -Program "C:\Program Files (x86)\TestIPv6App.exe"
+	}
 }
 
-# Check if there's an existing Zabbix firewall rule. If not, add a new rule. TCP, inbound, ports 10050 and 10051.
-If (Get-NetFirewallRule -DisplayName "Zabbix" -errorAction SilentlyContinue){
-	printOutput "WARN" "There is already a firewall rule with the name 'Zabbix'. `nWe'll assume this is fine and skip adding a new firewall rule."
-} Else {
-	Write-Host "No existing 'Zabbix' firewall rules have been found. Now adding a new rule."
-	#New-NetFirewallRule -DisplayName "Zabbix" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 10050,10051 -Program "C:\Program Files (x86)\TestIPv6App.exe"
-}
 
-## Ran agentd install command
+
+## Run agentd install command
 ## Verify if service exists with Get-Service
 ## Start service
 ## Wait for service to start, verify that it is running
