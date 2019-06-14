@@ -2,10 +2,6 @@
 $installationDirectory = "C:\Zabbix"
 $zabbixServerIP = 127.0.0.1
 
-# Determine this server's IP address
-# This gets put into the agent's configuration file
-# nslookup BRSPLP0997.emea.cshare.net | Select-String -Pattern 'Address' | Select-Object -Last 1 |
-
 Write-Host @"
  _____     _     _     _
 |__  /__ _| |__ | |__ (_)_  __
