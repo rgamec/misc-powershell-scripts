@@ -1,6 +1,7 @@
 # PowerShell script for re-installing a Zabbix Agent
 $installationDirectory = "C:\Zabbix"
 $zabbixServerIP = 127.0.0.1
+$domain = "example.com"
 
 Write-Host @"
  _____     _     _     _
@@ -36,9 +37,11 @@ Function printOutput{
 	Write-Host $messagetext
 }
 
+# Check requirements... gathering all checks under this heading.
+Write-Host "`nChecking requirements"
+Write-Host "----------------------"
+
 # Check if we're running with admin privileges, quit otherwise
-Write-Host "`nVerifying we are running with admin privileges"
-Write-Host "----------------------------------------------"
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 If (!$currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){
 	printOutput "ERROR" "This script needs to be run with admin privileges"
@@ -46,9 +49,8 @@ If (!$currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Adminis
 }
 printOutput "SUCCESS" "Script is running with administrator privileges."
 
+
 # Check if there is a Zabbix agent binary in the current directory
-Write-Host "`nChecking existence of required files"
-Write-Host "-------------------------------------"
 If (Test-Path "./zabbix_agent/"){
 	printOutput "SUCCESS" "Zabbix agent folder found in ./zabbix_agent"
 	If (-Not (Test-Path "./zabbix_agent/bin/")){
@@ -63,6 +65,18 @@ If (Test-Path "./zabbix_agent/"){
 	printOutput "ERROR" "Unable to find zabbix agent binary in the current directory."
 	Write-Host "Download the latest Zabbix agent and extract it here. `nName the folder 'zabbix_agent' and ensure there are 'bin' and 'conf' folders inside of it."
 	exit
+}
+
+# Check if we can determine the external IP address of this host
+# Using nslookup to check via DNS - since some hosts have lots of network interfaces.
+# TODO: Possible refactor - there must be a better way of doing this
+$addressString = nslookup "$($env:COMPUTERNAME).$($domain)" | Select-String -Pattern 'Address' | Select-Object -Last 1
+$matchObject = $addressString -match '\d.*?$'
+if ($matchObject){
+	$agentIP = $matches[0].trim()
+	printOutput "SUCCESS" "Found external IP address of this host: $agentIP"
+} else {
+	printOutput "ERROR" "Unable to determine the IP address of this server. Exiting."
 }
 
 # Uninstall existing Zabbix agent
