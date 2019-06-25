@@ -8,11 +8,14 @@
 # Todo:
 # Add installation routines
 # Sort out formatting of script
+# Add host information (hostname, date)
+# Add custom CSV parsing
+# Document required directory structure
 
 # User-defined variables
 $installationDirectory = "C:\Zabbix"
 $zabbixServerIP = 127.0.0.1
-$domain = "domain.com"
+$domain = "example.com"
 $agentInstallDirectory = "C:\Zabbix"
 
 Write-Host @"
@@ -104,6 +107,19 @@ if ($matchObject){
 	exit
 }
 
+# Check if there is a Config_Transforms.csv file present
+If (Test-Path "./Config_Transforms.csv"){
+	printOutput "SUCCESS" "Config_Transforms.csv file located in current directory"
+	
+	# TODO: Let's actually just parse the config file here.
+	$currentHost = "example"
+	
+} else {
+	printOutput "WARN" "Unable to find a Config_Transforms.csv file in the current directory."
+}
+
+# TODO: Check if we are able to access the Zabbix API (Coming soon)
+
 ###############################################################################
 #	STAGE 2: UNINSTALL EXISTING AGENT							              #
 ###############################################################################
@@ -159,10 +175,16 @@ If (-Not (Get-Command New-NetFirewallRule -errorAction SilentlyContinue))
 	
 	# Check if there's an existing Zabbix firewall rule. If not, add a new rule. TCP, inbound, ports 10050 and 10051.
 	If (Get-NetFirewallRule -DisplayName "Zabbix" -errorAction SilentlyContinue){
-		printOutput "WARN" "There is already a firewall rule with the name 'Zabbix'. `nWe'll assume this is fine and skip adding a new firewall rule."
+		printOutput "WARN" "There is already a firewall rule with the name 'Zabbix'. Not adding a new rule."
 	} Else {
-		Write-Host "No existing 'Zabbix' firewall rules have been found. Now adding a new rule."
-		#New-NetFirewallRule -DisplayName "Zabbix" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 10050,10051 -Program "C:\Program Files (x86)\TestIPv6App.exe"
+		$firewallResult = New-NetFirewallRule -DisplayName "Zabbix" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 10050,10051 | Select-Object -ExpandProperty PrimaryStatus
+		
+		If ($firewallResult -ne "OK"){
+			printOutput "ERROR" "Firewall rule could not be added automatically. Create it manually and re-run this script."
+			exit
+		} Else {
+			printOutput "SUCCESS" "New firewall rule has been successfully added."
+		}
 	}
 }
 
