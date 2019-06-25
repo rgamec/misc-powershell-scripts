@@ -9,11 +9,10 @@
 # Add installation routines
 # Sort out formatting of script
 # Add host information (hostname, date)
-# Add custom CSV parsing
+# Add custom CSV parsing [done]
 # Document required directory structure
 
 # User-defined variables
-$installationDirectory = "C:\Zabbix"
 $zabbixServerIP = 127.0.0.1
 $domain = "example.com"
 $agentInstallDirectory = "C:\Zabbix"
@@ -107,12 +106,33 @@ if ($matchObject){
 	exit
 }
 
-# Check if there is a Config_Transforms.csv file present
+# Check if there is a Config_Transforms.csv file present, then load data
 If (Test-Path "./Config_Transforms.csv"){
 	printOutput "SUCCESS" "Config_Transforms.csv file located in current directory"
 	
-	# TODO: Let's actually just parse the config file here.
-	$currentHost = "example"
+	$currentHost = $env:computername
+	$configLinesCount = 0
+	$relevantConfigLinesCount = 0
+	[System.Collections.ArrayList]$CustomHostConfigLines = @()
+	
+	# Iterate over each line in the config lines file, check if it matches current host
+	foreach($configLine in Get-Content ".\Config_Transforms.csv") {
+		$configLineHost = $configLine.split(",")[0]
+		$configLinesCount++
+		
+		# If line starts with current hostname, then add to our array of custom configs
+		if($configLineHost.toLower() -Match $currentHost.toLower()){
+			[void]$CustomHostConfigLines.Add($($configLine -replace "^.*?,",""))
+			$relevantConfigLinesCount++
+		}
+	}
+	
+	printOutput "SUCCESS" "$configLinesCount config lines were parsed. $relevantConfigLinesCount lines are relevant to this host."
+	
+	# Print out the custom config lines we've extracted
+	for ($c = 0; $c -lt $CustomHostConfigLines.Count; $c++){
+		printOutput "INFO" "Custom config: $($CustomHostConfigLines[$c])"
+	}
 	
 } else {
 	printOutput "WARN" "Unable to find a Config_Transforms.csv file in the current directory."
@@ -188,10 +208,10 @@ If (-Not (Get-Command New-NetFirewallRule -errorAction SilentlyContinue))
 	}
 }
 
-
-
+## TODO ##
+## Copy across Zabbix binary and (transformed) config file to Install directory
 ## Run agentd install command
 ## Verify if service exists with Get-Service
 ## Start service
 ## Wait for service to start, verify that it is running
-# Run a call against the Zabbix API to add the server into an 'uncategorized' host group
+## Run a call against the Zabbix API to add the server into an 'uncategorized' host group
